@@ -1,0 +1,161 @@
+---
+title: "Daños en la RVN"
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    theme: journal
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+# Paquete para manipulación de datos
+library(dplyr)
+# Paquete para manejo de datos vectoriales
+library(sf)
+# Paquetes para manejo de datos raster
+library(terra)
+# Paquete para manejo de tablas
+library(DT)
+# Paquetes para graficación
+library(ggplot2)
+library(plotly)
+# Paquete para mapas interactivos
+library(leaflet)
+# Paquete para dashboard
+library(flexdashboard)
+
+
+
+# Lectura de una capa vectorial (GeoJSON) de zonas de conservación vial
+zonas <-
+  st_read(
+    "https://raw.githubusercontent.com/ggaltar/danos_red_vial/main/capas/zonas_conservacion_wgs84.geojson",
+    quiet = TRUE
+  )
+
+# Lectura de una capa vectorial (GeoJSON) de daños en la red vial nacional
+danos <-
+  st_read(
+    "https://raw.githubusercontent.com/ggaltar/danos_red_vial/main/capas/danos_wgs84.geojson",
+    quiet = TRUE
+  )
+
+# Lectura de una capa raster de altitud
+altitud <-
+  rast(
+    "/vsicurl/https://raw.githubusercontent.com/tpb728O-programaciongeoespacialr/2021ii/master/datos/worldclim/altitud.tif"
+  )
+```
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Tabla de daños
+
+```{r tabla}
+danos %>%
+  st_drop_geometry() %>%
+  select(id, estructura, elemento, tipo, severidad) %>%
+  datatable(rownames = FALSE,
+            colnames = c('ID', 'Estructura','Elemento', 'Tipo', 'Severidad'),
+            filter = 'top',
+            options = list(
+              language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+            )
+  )
+```
+
+### Mapa ubicación de daños
+```{r mapa, warning=FALSE}
+altitud_rl <- raster::raster(altitud)
+
+# Registro de daños, zonas de conservación y ráster de altitud
+leaflet() %>%
+  addProviderTiles(providers$Esri.NatGeoWorldMap , group = "Nat Geo") %>%
+  addTiles(group = "OSM") %>%
+  addProviderTiles(providers$CartoDB.Positron, group = "CartoDB") %>%
+  setView(-84.10, 9.5, 7) %>%
+  addRasterImage(
+    altitud_rl, 
+    opacity = 0.5,
+    group = "Altitud"
+  ) %>%    
+  addPolygons(
+    data = zonas,
+    color = "black",
+    fillColor = "transparent",
+    stroke = TRUE,
+    weight = 1.0,
+    group = "Zonas de conservación"
+  ) %>%
+  addCircleMarkers(
+    data = danos,
+    stroke = F,
+    radius = 3,
+    fillColor = '#3c6e71',
+    fillOpacity = 1,
+    group = "Daños"
+  )  %>%
+  addLayersControl(
+    baseGroups = c("Nat Geo", "OSM", "CartoDB"),
+    overlayGroups = c("Daños", "Zonas de conservación","Altitud"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  hideGroup("Altitud")
+```
+
+
+Column {.tabset data-width=400}
+-----------------------------------------------------------------------
+
+### Gráfico de principales elementos dañados
+
+```{r graf1}
+# Preparación de los datos
+elementos <-
+  danos %>%
+  st_drop_geometry() %>%
+  select(elemento) %>%
+  rename(Elemento = elemento) %>%
+  group_by(Elemento) %>%
+  summarise(suma = n()) %>%
+  filter(suma > 10)
+
+# Ordenando la tabla por cantidad en orden descendente (no se usó, se cambió por reorder() )
+#elementos$Elemento <- factor(elementos$Elemento,
+#                      levels = elementos$Elemento[order(elementos$suma, decreasing = TRUE)])
+
+
+# Gráfico de principales elementos dañados
+
+ggplot(elementos, aes(x = reorder(Elemento, -suma),y = suma)) +
+  geom_col(colour = "#bc4b51", fill = "#bc4b51",width = 0.5) +
+  geom_text(aes(label = suma), vjust = 1.2, colour = "White") +
+  ggtitle("Principales elementos dañados") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 30,hjust = 1, vjust = 1)
+        ) +
+  xlab("Elementos") +
+  ylab("Cantidad")
+```
+
+### Gráfico de registros mensuales
+```{r}
+registros_mes <-
+  danos %>%
+  st_drop_geometry() %>%
+  mutate(fecha = as.Date(fecha_rep, formtat = "%m/%d/%Y")) %>%
+  group_by (mes = format(fecha, "%m")) %>%
+  summarise (reportes = n())
+
+# Gráfico de registros mensuales
+ggplot(registros_mes, aes(x = mes, y = reportes)) +
+  ggtitle("Registros de daños por mes 2020-2021") +
+  geom_col(colour = "#6a994e", fill = "#6a994e",width = 0.5) + 
+  geom_text(aes(label = reportes), vjust = -0.5, colour = "#3a5a40") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab("Mes") +
+  ylab("Reportes") +
+  scale_x_discrete(labels = c("01" = "Ene", "02" = "Feb", "03" = "Mar", "04" = "Abr", "05" = "May", "06" = "Jun", "07" = "Jul", "08" = "Ago", "09" = "Set", "10" = "Oct", "11" = "Nov", "12" = "Dic"))
+```
+
