@@ -40,10 +40,10 @@ danos <-
     quiet = TRUE
   )
 
-# Lectura de una capa raster de altitud
-altitud <-
+# Lectura de una capa raster de las zonas
+zonas_ras <-
   rast(
-    "/vsicurl/https://raw.githubusercontent.com/tpb728O-programaciongeoespacialr/2021ii/master/datos/worldclim/altitud.tif"
+    "/vsicurl/https://raw.githubusercontent.com/ggaltar/danos_red_vial/main/capas/zonas_cons.tif"
   )
 ```
 
@@ -67,22 +67,25 @@ danos %>%
 
 ### Mapa ubicación de daños
 ```{r mapa, warning=FALSE}
-altitud_rl <- raster::raster(altitud)
+zonas_rl <- raster::raster(zonas_ras)
+rango <- seq(1:78)
+paleta <- colorBin("Reds", domain = rango , na.color = "transparent")
 
-# Registro de daños, zonas de conservación y ráster de altitud
+# Registro de daños, zonas de conservación y ráster de zonas de conservación por cantidad
 leaflet() %>%
   addProviderTiles(providers$Esri.NatGeoWorldMap , group = "Nat Geo") %>%
   addTiles(group = "OSM") %>%
   addProviderTiles(providers$CartoDB.Positron, group = "CartoDB") %>%
   setView(-84.10, 9.5, 7) %>%
   addRasterImage(
-    altitud_rl, 
+    zonas_rl, 
     opacity = 0.5,
-    group = "Altitud"
+    group = "Zonas por cantidad",
+    colors = paleta
   ) %>%    
   addPolygons(
     data = zonas,
-    color = "black",
+    color = "#370617",
     fillColor = "transparent",
     stroke = TRUE,
     weight = 1.0,
@@ -98,10 +101,10 @@ leaflet() %>%
   )  %>%
   addLayersControl(
     baseGroups = c("Nat Geo", "OSM", "CartoDB"),
-    overlayGroups = c("Daños", "Zonas de conservación","Altitud"),
+    overlayGroups = c("Daños", "Zonas de conservación","Zonas por cantidad"),
     options = layersControlOptions(collapsed = FALSE)
   ) %>%
-  hideGroup("Altitud")
+  hideGroup("Zonas por cantidad")
 ```
 
 
